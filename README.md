@@ -1,4 +1,4 @@
-# VulFusion-AWAF — Tái hiện báo cáo chuyên đề
+# VulFusion-AWAF
 
 **FCRM-AWAF: Adaptive Weighted-Attention Fusion of Semantic and Structural Representations for Source Code Vulnerability Detection**
 
