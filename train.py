@@ -1,9 +1,3 @@
-"""
-Huấn luyện FCRM (baseline) và FCRM-AWAF (đề xuất) trên Juliet/Big-Vul/NVD.
-
-Chỉ 2 model này — theo Mục V-A của báo cáo, Table III chỉ so sánh FCRM vs FCRM-AWAF.
-CodeBERT/GraphCodeBERT trong Table IV được trích từ [23] nên không retrain.
-"""
 import os
 import argparse
 import pandas as pd
@@ -35,8 +29,9 @@ def get_loaders(split_root, ds_key, cfg):
     def _mk(rows, shuffle):
         ds = VulnDataset(rows, m["codebert_name"], m["graphcodebert_name"],
                          p["tree_sitter_lib"], t["max_len_code"], t["max_len_graph"])
-        # BẮT BUỘC num_workers=0: DFGExtractor không pickle được
-        return DataLoader(ds, batch_size=t["batch_size"], shuffle=shuffle, num_workers=0)
+        # TỐI ƯU: Tăng num_workers để đa luồng (Windows khuyến nghị 2-4)
+        return DataLoader(ds, batch_size=t["batch_size"], shuffle=shuffle,
+                          num_workers=4, persistent_workers=True)
 
     return _mk(tr, True), _mk(va, False), _mk(te, False)
 
@@ -66,7 +61,16 @@ def main():
 
     cfg = load_yaml(args.config)
     set_seed(cfg["seed"])
-    device = cfg["device"] if torch.cuda.is_available() else "cpu"
+
+    # --- KIỂM TRA THIẾT BỊ ---
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print(f"[INFO] Đang sử dụng GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        device = torch.device("cpu")
+        print("[WARN] Không tìm thấy GPU (CUDA). Đang chạy bằng CPU (sẽ rất chậm).")
+    # -------------------------
+
     ensure_dir(cfg["paths"]["checkpoint_dir"])
     ensure_dir(cfg["paths"]["output_dir"])
 
