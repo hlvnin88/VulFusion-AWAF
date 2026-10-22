@@ -6,6 +6,11 @@ from src.graph_features import build_graphcodebert_inputs
 
 
 class VulnDataset(Dataset):
+    """
+    QUAN TRỌNG: Dataset chứa DFGExtractor (tree-sitter Parser = C extension).
+    Parser KHÔNG pickle được -> DataLoader PHẢI dùng num_workers=0.
+    """
+
     def __init__(
         self,
         rows,
@@ -21,27 +26,36 @@ class VulnDataset(Dataset):
         self.max_len_code = max_len_code
         self.max_len_graph = max_len_graph
         self.extractor = DFGExtractor(tree_sitter_so)
+        self._dfg_cache = {}
 
     def __len__(self):
         return len(self.rows)
 
+    def _get_dfg(self, code: str, lang: str):
+        key = hash(code)
+        if key in self._dfg_cache:
+            return self._dfg_cache[key]
+        try:
+            info = self.extractor.extract(code, lang)
+        except Exception as e:
+            print(f"[WARN] DFG extraction failed: {e}")
+            info = {"dfg": [], "token_names": []}
+        self._dfg_cache[key] = info
+        return info
+
     def __getitem__(self, idx):
         row = self.rows[idx]
         code = row["code"]
-        label = float(row["label"])
+        # CrossEntropyLoss yêu cầu long
+        label = int(row["label"])
         lang = row.get("language", "cpp")
 
-        # CodeBERT branch
         enc_c = self.code_tok(
-            code,
-            truncation=True,
-            padding="max_length",
-            max_length=self.max_len_code,
-            return_tensors="pt",
+            code, truncation=True, padding="max_length",
+            max_length=self.max_len_code, return_tensors="pt",
         )
 
-        # GraphCodeBERT branch with real DFG extraction
-        dfg_info = self.extractor.extract(code, lang)
+        dfg_info = self._get_dfg(code, lang)
         g = build_graphcodebert_inputs(
             self.graph_tok, code, dfg_info, max_len=self.max_len_graph
         )
@@ -49,10 +63,8 @@ class VulnDataset(Dataset):
         return {
             "input_ids_c": enc_c["input_ids"].squeeze(0),
             "attention_mask_c": enc_c["attention_mask"].squeeze(0),
-
             "input_ids_g": g["input_ids"],
             "attention_mask_g": g["attention_mask"],
             "position_idx_g": g["position_idx"],
-
-            "label": torch.tensor(label, dtype=torch.float),
+            "label": torch.tensor(label, dtype=torch.long),
         }

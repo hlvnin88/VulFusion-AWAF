@@ -11,10 +11,7 @@ def build_parsers(so_path: str):
     parser_cpp = Parser()
     parser_cpp.set_language(lang_cpp)
 
-    return {
-        "c": parser_c,
-        "cpp": parser_cpp,
-    }
+    return {"c": parser_c, "cpp": parser_cpp}
 
 
 def parse_code(parser, code: str):

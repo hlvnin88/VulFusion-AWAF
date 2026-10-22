@@ -5,9 +5,6 @@ import hashlib
 from src.utils import load_jsonl, write_jsonl, ensure_dir
 
 
-TARGET = {"c", "cpp", "c++"}
-
-
 def norm_lang(x):
     l = str(x or "unknown").lower().strip()
     if l in {"cpp", "c++", "cc", "cxx"}:
@@ -18,8 +15,7 @@ def norm_lang(x):
 
 
 def process(rows):
-    out = []
-    seen = set()
+    out, seen = [], set()
     for r in rows:
         code = str(r.get("code", "")).strip()
         if len(code) < 10:
@@ -45,23 +41,19 @@ def main():
 
     ensure_dir(args.out_dir)
     counts = {}
-
     for name in ["juliet", "bigvul", "nvd"]:
         p = os.path.join(args.data_dir, f"{name}.jsonl")
         if not os.path.exists(p):
             print(f"[WARN] missing {p}")
             counts[name] = 0
             continue
-        rows = load_jsonl(p)
-        rows = process(rows)
+        rows = process(load_jsonl(p))
         write_jsonl(os.path.join(args.out_dir, f"{name}.jsonl"), rows)
         counts[name] = len(rows)
         print(f"[OK] {name}: {len(rows)}")
 
-    if args.strict:
-        missing = [k for k, v in counts.items() if v == 0]
-        if missing:
-            raise SystemExit(f"[ERROR] empty processed datasets: {missing}")
+    if args.strict and any(v == 0 for v in counts.values()):
+        raise SystemExit("[ERROR] empty processed datasets")
 
 
 if __name__ == "__main__":

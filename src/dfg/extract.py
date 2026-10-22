@@ -20,7 +20,4 @@ class DFGExtractor:
         tree = parse_code(parser, code)
         root = tree.root_node
         dfg, token_names = build_dfg(root, code)
-        return {
-            "dfg": dfg,                # list[(var, idx, deps)]
-            "token_names": token_names
-        }
+        return {"dfg": dfg, "token_names": token_names}
