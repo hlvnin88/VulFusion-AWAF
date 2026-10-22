@@ -2,7 +2,7 @@
 
 **FCRM-AWAF: Adaptive Weighted-Attention Fusion of Semantic and Structural Representations for Source Code Vulnerability Detection**
 
-## Kiến trúc & công thức (khớp báo cáo)
+## Kiến trúc & công thức
 
 - **Semantic**: `microsoft/codebert-base` → `E_C` (Eq.1-2)
 - **Structural**: `microsoft/graphcodebert-base` (DFG từ tree-sitter) → `E_G` (Eq.3-5)
