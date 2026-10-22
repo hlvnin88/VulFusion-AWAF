@@ -26,7 +26,9 @@ def load_jsonl(path):
     rows = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            rows.append(json.loads(line))
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
     return rows
 
 

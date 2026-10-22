@@ -1,104 +1,86 @@
 #!/usr/bin/env python
+"""
+Tải trọn bộ 3 dataset: Big-Vul, Juliet, NVD từ HuggingFace.
+Chạy: python scripts/download_data.py
+"""
 import os
-import json
 import argparse
 from datasets import load_dataset
+from src.utils import ensure_dir, write_jsonl
 
 
-def ensure_dir(p):
-    os.makedirs(p, exist_ok=True)
+def download_bigvul(out_dir):
+    print("Đang tải Big-Vul (Fallback: code_x_glue)...")
+    try:
+        ds = load_dataset("google/code_x_glue_cc_defect_detection", split="train")
+        rows = []
+        for item in ds:
+            code = item.get("func", "")
+            if code and len(str(code).strip()) > 10:
+                label = 1 if item.get("target", 0) > 0 else 0
+                rows.append({"code": str(code), "label": label, "language": "c"})
+
+        out_path = os.path.join(out_dir, "bigvul.jsonl")
+        write_jsonl(out_path, rows)
+        print(f"[OK] Đã lưu {len(rows)} mẫu Big-Vul vào {out_path}")
+    except Exception as e:
+        print(f"[LỖI] Không thể tải Big-Vul: {e}")
 
 
-def pick_code(x):
-    for k in ["func", "function", "code", "source", "source_code", "text", "processed_func"]:
-        if k in x and x[k] is not None and str(x[k]).strip():
-            return str(x[k])
-    return ""
+def download_juliet(out_dir):
+    print("Đang tải Juliet (LorenzH/juliet_test_suite_c_1_3)...")
+    try:
+        ds = load_dataset("LorenzH/juliet_test_suite_c_1_3", split="train")
+        rows = []
+        for item in ds:
+            bad_code = item.get("bad")
+            good_code = item.get("good")
+            if bad_code and len(str(bad_code).strip()) > 10:
+                rows.append({"code": str(bad_code), "label": 1, "language": "c"})
+            if good_code and len(str(good_code).strip()) > 10:
+                rows.append({"code": str(good_code), "label": 0, "language": "c"})
+
+        out_path = os.path.join(out_dir, "juliet.jsonl")
+        write_jsonl(out_path, rows)
+        print(f"[OK] Đã lưu {len(rows)} mẫu Juliet vào {out_path}")
+    except Exception as e:
+        print(f"[LỖI] Không thể tải Juliet: {e}")
 
 
-def pick_label(x):
-    for k in ["target", "label", "vul", "is_vuln", "is_vulnerable"]:
-        if k in x:
-            try:
-                return 1 if int(x[k]) > 0 else 0
-            except Exception:
-                return 1 if str(x[k]).lower() in ["true", "vulnerable", "yes"] else 0
-    return 0
+def download_nvd(out_dir):
+    print("Đang tải NVD (arag0rn/SecVulEval)...")
+    try:
+        ds = load_dataset("arag0rn/SecVulEval", split="train")
+        rows = []
+        for item in ds:
+            code = item.get("func_body")
+            is_vul = item.get("is_vulnerable")
+            if code and len(str(code).strip()) > 10:
+                label = 1 if is_vul else 0
+                rows.append({"code": str(code), "label": label, "language": "c"})
 
-
-def pick_language(x):
-    for k in ["language", "lang", "programming_language"]:
-        if k in x and x[k] is not None:
-            return str(x[k]).lower()
-    return "unknown"
-
-
-def normalize(ds, limit=None):
-    rows = []
-    for i, x in enumerate(ds):
-        if limit is not None and i >= limit:
-            break
-        code = pick_code(x)
-        if not code:
-            continue
-        rows.append({"code": code, "label": pick_label(x), "language": pick_language(x)})
-    return rows
-
-
-def dump_jsonl(path, rows):
-    with open(path, "w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-
-
-def try_load(repo, subset=None, split="train"):
-    if subset:
-        return load_dataset(repo, subset, split=split)
-    return load_dataset(repo, split=split)
+        out_path = os.path.join(out_dir, "nvd.jsonl")
+        write_jsonl(out_path, rows)
+        print(f"[OK] Đã lưu {len(rows)} mẫu NVD vào {out_path}")
+    except Exception as e:
+        print(f"[LỖI] Không thể tải NVD: {e}")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out_dir", default="data/raw")
-    ap.add_argument("--strict", action="store_true")
-    ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
     ensure_dir(args.out_dir)
-    limit = None if args.limit == 0 else args.limit
 
-    out = {"juliet": [], "bigvul": [], "nvd": []}
+    download_bigvul(args.out_dir)
+    download_juliet(args.out_dir)
+    download_nvd(args.out_dir)
 
-    try:
-        out["bigvul"] = normalize(try_load("DetectVul/devign", "bigvul", "train"), limit)
-    except Exception as e:
-        print("[WARN] bigvul:", e)
-
-    try:
-        out["juliet"] = normalize(try_load("DetectVul/devign", "juliet", "train"), limit)
-    except Exception as e:
-        print("[WARN] juliet:", e)
-
-    for repo, subset in [("DetectVul/devign", "nvd"), ("Mireu-Lab/Fan_et_al", None)]:
-        if out["nvd"]:
-            break
-        try:
-            out["nvd"] = normalize(try_load(repo, subset, "train"), limit)
-        except Exception:
-            pass
-
-    for name in ["juliet", "bigvul", "nvd"]:
-        rows = out[name]
-        if rows:
-            path = os.path.join(args.out_dir, f"{name}.jsonl")
-            dump_jsonl(path, rows)
-            print(f"[OK] {name}: {len(rows)}")
-        else:
-            print(f"[WARN] {name} missing")
-
-    missing = [k for k, v in out.items() if len(v) == 0]
-    if args.strict and missing:
-        raise SystemExit(f"[ERROR] missing datasets: {missing}")
+    print("\n[HOÀN TẤT] Dữ liệu đã sẵn sàng trong thư mục data/raw/")
+    print("Bước tiếp theo:")
+    print("  python scripts/preprocess_data.py")
+    print("  python scripts/split_data.py --seed 42")
 
 
 if __name__ == "__main__":

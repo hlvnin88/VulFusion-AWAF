@@ -21,7 +21,7 @@ models:
   mlp_hidden_dims: [512, 256]
 
 train:
-  epochs: 10
+  epochs: 20               # báo cáo Mục IV: "maximum number of training epochs is 20"
   batch_size: 16
   lr: 2.0e-5
   weight_decay: 0.01

@@ -1,9 +1,19 @@
+# Môi trường ảo
 .venv/
 __pycache__/
 *.pyc
-checkpoints/
-data/raw/
-data/processed/
-data/splits/
+
+# Dữ liệu (quá nặng để đưa lên git)
+data/
 build/
 vendor/
+
+# Kết quả huấn luyện & model
+checkpoints/
+outputs/
+
+# IDE / HĐH
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,11 +1,9 @@
 """
-Simplified-but-real dataflow extraction for C/C++ using tree-sitter AST:
-- collect identifier defs/uses
-- build define-use edges
-- return DFG nodes as (var_name, token_index, [dep_token_indices])
+Dataflow extraction C/C++ bằng tree-sitter (define-use edges).
 
-This is real parser/dataflow logic (not placeholder text),
-implemented as a lightweight GraphCodeBERT-style re-implementation.
+Trả về DFG nodes dạng (var_name, token_index, [dep_token_indices])
+- Đây là DFG "define-use" đơn giản, đủ để build dfg_to_code / dfg_to_dfg.
+- Không phải full reaching-definitions analysis, nhưng là logic thật (không placeholder).
 """
 
 def walk(node, out):
@@ -23,7 +21,6 @@ def is_identifier(node):
 
 
 def is_definition_context(node):
-    # heuristic for C/C++ declarations/params
     p = node.parent
     if p is None:
         return False
@@ -41,7 +38,6 @@ def extract_tokens_with_pos(root, code):
     code_bytes = bytes(code, "utf8")
     nodes = []
     walk(root, nodes)
-
     toks = []
     for n in nodes:
         if is_identifier(n):
@@ -53,18 +49,11 @@ def extract_tokens_with_pos(root, code):
 
 def build_dfg(root, code):
     tokens = extract_tokens_with_pos(root, code)
+    indexed = [{"idx": i, "name": name, "node": n}
+               for i, (name, _sp, _ep, n) in enumerate(tokens)]
 
-    # flatten token index
-    indexed = []
-    for i, (name, sp, ep, node) in enumerate(tokens):
-        indexed.append({
-            "idx": i,
-            "name": name,
-            "node": node,
-        })
-
-    last_def = {}  # var -> token_idx
-    edges = []     # (var, use_idx, [def_idx])
+    last_def = {}
+    edges = []
 
     for t in indexed:
         name = t["name"]
@@ -72,11 +61,9 @@ def build_dfg(root, code):
         n = t["node"]
 
         if is_definition_context(n):
-            # new definition
             last_def[name] = idx
-            edges.append((name, idx, []))  # def node
+            edges.append((name, idx, []))
         else:
-            # usage depends on latest def if exists
             dep = [last_def[name]] if name in last_def else []
             edges.append((name, idx, dep))
 
