@@ -165,5 +165,4 @@ Configured in `configs/default.yaml`:
 This project is for academic and research purposes. 
 
 ## 12. Contact
-- **Group Members**: Hồ Lê Viết Nin, Trần Nhật Vinh, Ngô Văn Hiếu, Trịnh Quang Tin
 - **Email**: hlvnin88@gmail.com
