@@ -1,15 +1,3 @@
-"""
-Sinh 3 bảng đúng cấu trúc báo cáo:
-
-  table_3_1.csv    ↔  TABLE III  (in-domain, FCRM vs FCRM-AWAF trên Juliet/Big-Vul/NVD)
-  table_3_2.csv    ↔  TABLE IV   (Big-Vul; CodeBERT/GraphCodeBERT trích từ [23],
-                                  FCRM/FCRM-AWAF từ thực nghiệm)
-  table_5_cross.csv ↔ TABLE V    (cross-dataset FCRM vs FCRM-AWAF)
-
-Lưu ý: CodeBERT/GraphCodeBERT trong TABLE IV là số trích dẫn từ Qi et al. [23]
-vì Mục V-B của báo cáo nêu rõ như vậy. KHÔNG trộn với kết quả tự train
-(khác tiền xử lý, khác data augmentation) — tránh so sánh sai.
-"""
 import os
 import argparse
 import pandas as pd
@@ -21,15 +9,10 @@ from src.data import VulnDataset
 from src.models.fcrm import FCRMBase, FCRMAWAF
 from src.engine.trainer import evaluate
 
-
-# Số liệu trích dẫn [23] (Qi et al.) — dùng cho TABLE IV
+# Số liệu trích dẫn [23] - Dùng cho Bảng IV
 PUBLISHED_BIGVUL = [
-    {"dataset": "Big-Vul", "model": "CodeBERT",     "accuracy": 0.755,
-     "precision": 0.775, "recall": 0.719, "f1": 0.746, "roc_auc": None,
-     "mcc": None, "source": "[23]"},
-    {"dataset": "Big-Vul", "model": "GraphCodeBERT", "accuracy": 0.733,
-     "precision": 0.769, "recall": 0.667, "f1": 0.714, "roc_auc": None,
-     "mcc": None, "source": "[23]"},
+    {"Model": "CodeBERT",      "Accuracy": 0.7550, "Precision": 0.7750, "Recall": 0.7190, "F1-score": 0.7460, "ROC-AUC": "-", "Citation": "[23]"},
+    {"Model": "GraphCodeBERT", "Accuracy": 0.7330, "Precision": 0.7690, "Recall": 0.6670, "F1-score": 0.7140, "ROC-AUC": "-", "Citation": "[23]"},
 ]
 
 
@@ -68,60 +51,64 @@ def main():
 
     df = pd.read_csv(results_csv)
 
-    # ---- Table III: in-domain FCRM vs FCRM-AWAF ----
+    # ================= BẢNG III =================
     t3 = df[df["model"].isin(["FCRM", "FCRM-AWAF"])].copy()
+    t3 = t3.rename(columns={
+        "dataset": "Dataset", "model": "Model", "accuracy": "Accuracy", 
+        "precision": "Precision", "recall": "Recall", "f1": "F1-score", 
+        "roc_auc": "ROC-AUC", "mcc": "MCC"
+    })
+    # Sắp xếp thứ tự
     order_ds = {"Juliet": 0, "Big-Vul": 1, "NVD": 2}
     order_md = {"FCRM": 0, "FCRM-AWAF": 1}
-    t3["_od"] = t3["dataset"].map(order_ds).fillna(99)
-    t3["_om"] = t3["model"].map(order_md).fillna(99)
+    t3["_od"] = t3["Dataset"].map(order_ds).fillna(99)
+    t3["_om"] = t3["Model"].map(order_md).fillna(99)
     t3 = t3.sort_values(["_od", "_om"]).drop(columns=["_od", "_om"])
-    cols_iii = ["dataset", "model", "accuracy", "precision", "recall",
-                "f1", "roc_auc", "mcc"]
-    cols_iii = [c for c in cols_iii if c in t3.columns]
-    t3[cols_iii].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_1.csv"),
-                        index=False)
-    print("[OK] saved outputs/table_3_1.csv   (TABLE III)")
+    
+    cols_iii = ["Dataset", "Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "MCC"]
+    t3[cols_iii].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_1.csv"), index=False)
+    print("[OK] saved outputs/table_3_1.csv (TABLE III)")
 
-    # ---- Table IV: Big-Vul, 4 model (2 published + 2 trained) ----
-    big_trained = df[(df["dataset"] == "Big-Vul") &
-                     (df["model"].isin(["FCRM", "FCRM-AWAF"]))].copy()
-    big_trained["source"] = "This work"
-    trained_rows = big_trained.to_dict(orient="records")
+    # ================= BẢNG IV =================
+    big_trained = df[(df["dataset"] == "Big-Vul") & (df["model"].isin(["FCRM", "FCRM-AWAF"]))].copy()
+    big_trained = big_trained.rename(columns={
+        "model": "Model", "accuracy": "Accuracy", "precision": "Precision", 
+        "recall": "Recall", "f1": "F1-score", "roc_auc": "ROC-AUC"
+    })
+    big_trained["Citation"] = "This work"
+    big_trained.loc[big_trained["Model"] == "FCRM-AWAF", "Citation"] = "This work, with AWAF"
 
+    trained_rows = big_trained[["Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "Citation"]].to_dict(orient="records")
     t4 = pd.DataFrame(PUBLISHED_BIGVUL + trained_rows)
+    
     order = ["CodeBERT", "GraphCodeBERT", "FCRM", "FCRM-AWAF"]
-    t4["_o"] = t4["model"].apply(lambda x: order.index(x) if x in order else 99)
+    t4["_o"] = t4["Model"].apply(lambda x: order.index(x) if x in order else 99)
     t4 = t4.sort_values("_o").drop(columns="_o").reset_index(drop=True)
+    
+    cols_iv = ["Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "Citation"]
+    t4[cols_iv].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_2.csv"), index=False)
+    print("[OK] saved outputs/table_3_2.csv (TABLE IV)")
 
-    missing = set(order) - set(t4["model"])
-    if missing:
-        print(f"[WARN] TABLE IV thiếu: {sorted(missing)} (chưa train xong?)")
-
-    cols_iv = ["dataset", "model", "accuracy", "precision", "recall",
-               "f1", "roc_auc", "source"]
-    cols_iv = [c for c in cols_iv if c in t4.columns]
-    t4[cols_iv].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_2.csv"),
-                       index=False)
-    print("[OK] saved outputs/table_3_2.csv   (TABLE IV)")
-
-    # ---- Table V: cross-dataset ----
-    if args.skip_cross:
-        return
+    # ================= BẢNG V =================
+    if args.skip_cross: return
 
     datasets = [("juliet", "Juliet"), ("bigvul", "Big-Vul"), ("nvd", "NVD")]
     models = [("fcrm", "FCRM"), ("fcrm_awaf", "FCRM-AWAF")]
     cross_rows = []
 
+    print("\nĐang chạy đánh giá Cross-dataset (Table V)...")
     for tr_dk, tr_dn in datasets:
         for te_dk, te_dn in datasets:
-            if tr_dk == te_dk:
-                continue
+            if tr_dk == te_dk: continue
+            
             loader = None
+            row = {"Train Dataset": tr_dn, "Test Dataset": te_dn, "FCRM (F1-score)": "-", "FCRM-AWAF (F1-score)": "-"}
+            
             for mk, mn in models:
                 ckpt = os.path.join(cfg["paths"]["checkpoint_dir"], f"{tr_dk}_{mk}.pt")
                 if not os.path.exists(ckpt):
-                    print(f"[SKIP] {ckpt} not found")
                     continue
+                
                 if loader is None:
                     loader = get_test_loader(cfg["paths"]["split_data_dir"], te_dk, cfg)
 
@@ -129,26 +116,25 @@ def main():
                 model.load_state_dict(torch.load(ckpt, map_location=device))
                 model.eval()
                 _, m = evaluate(model, loader, device)
-                cross_rows.append({
-                    "train": tr_dn, "test": te_dn, "model": mn,
-                    "accuracy": m["accuracy"], "precision": m["precision"],
-                    "recall": m["recall"], "f1": m["f1"],
-                    "roc_auc": m["roc_auc"], "mcc": m["mcc"],
-                })
-                print(f"[CROSS] {tr_dn:8s} -> {te_dn:8s} | {mn:10s} | F1={m['f1']:.4f}")
+                
+                if mn == "FCRM":
+                    row["FCRM (F1-score)"] = round(m["f1"], 4)
+                else:
+                    row["FCRM-AWAF (F1-score)"] = round(m["f1"], 4)
+                
+                print(f"  {tr_dn:8s} -> {te_dn:8s} | {mn:10s} | F1 = {m['f1']:.4f}")
+                
                 del model
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                if torch.cuda.is_available(): torch.cuda.empty_cache()
+            
+            cross_rows.append(row)
 
     if cross_rows:
-        pd.DataFrame(cross_rows).to_csv(
-            os.path.join(cfg["paths"]["output_dir"], "table_5_cross.csv"),
-            index=False,
-        )
-        print("[OK] saved outputs/table_5_cross.csv   (TABLE V)")
+        df_cross = pd.DataFrame(cross_rows)
+        df_cross.to_csv(os.path.join(cfg["paths"]["output_dir"], "table_5_cross.csv"), index=False)
+        print("[OK] saved outputs/table_5_cross.csv (TABLE V)")
     else:
-        print("[WARN] Không có cross-dataset nào — kiểm tra checkpoint.")
-
+        print("[WARN] Không có dữ liệu Cross-dataset.")
 
 if __name__ == "__main__":
     main()

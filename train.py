@@ -29,7 +29,7 @@ def get_loaders(split_root, ds_key, cfg):
     def _mk(rows, shuffle):
         ds = VulnDataset(rows, m["codebert_name"], m["graphcodebert_name"],
                          p["tree_sitter_lib"], t["max_len_code"], t["max_len_graph"])
-        # TỐI ƯU: Tăng num_workers để đa luồng (Windows khuyến nghị 2-4)
+        # TỐI ƯU: Tăng num_workers để đa luồng
         return DataLoader(ds, batch_size=t["batch_size"], shuffle=shuffle,
                           num_workers=4, persistent_workers=True)
 
@@ -53,10 +53,8 @@ def append_results(csv_path, row):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/default.yaml")
-    ap.add_argument("--model", default="all",
-                    choices=["all", "fcrm", "fcrm_awaf"])
-    ap.add_argument("--dataset", default="all",
-                    choices=["all", "juliet", "bigvul", "nvd"])
+    ap.add_argument("--model", default="all", choices=["all", "fcrm", "fcrm_awaf"])
+    ap.add_argument("--dataset", default="all", choices=["all", "juliet", "bigvul", "nvd"])
     args = ap.parse_args()
 
     cfg = load_yaml(args.config)
@@ -69,7 +67,6 @@ def main():
     else:
         device = torch.device("cpu")
         print("[WARN] Không tìm thấy GPU (CUDA). Đang chạy bằng CPU (sẽ rất chậm).")
-    # -------------------------
 
     ensure_dir(cfg["paths"]["checkpoint_dir"])
     ensure_dir(cfg["paths"]["output_dir"])
