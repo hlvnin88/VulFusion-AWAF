@@ -1,5 +1,5 @@
 Model,Accuracy,Precision,Recall,F1-score,ROC-AUC,Citation
-CodeBERT,0.7550,0.7750,0.7190,0.7460,-,[23]
-GraphCodeBERT,0.7330,0.7690,0.6670,0.7140,-,[23]
-FCRM,0.84,0.85,0.80,0.82,0.87,This work
-FCRM-AWAF,0.88,0.88,0.84,0.86,0.90,"This work, with AWAF"
+CodeBERT,0.755,0.775,0.719,0.746,-,[23]
+GraphCodeBERT,0.733,0.769,0.667,0.714,-,[23]
+FCRM,0.84,0.85,0.8,0.82,0.87,This work
+FCRM-AWAF,0.88,0.88,0.84,0.86,0.9,"This work, with AWAF"

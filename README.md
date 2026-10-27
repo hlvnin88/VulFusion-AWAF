@@ -22,7 +22,7 @@ VulFusion-AWAF/
 ├── README.md
 ├── requirements.txt
 ├── configs/
-│   └── default.yaml               # All hyperparameters (epochs, lr, etc.)
+│   └── default.yaml               # All hyperparameters (epochs, lr, seeds, etc.)
 ├── scripts/
 │   ├── setup_treesitter.sh        # Bash script to build tree-sitter (Linux)
 │   ├── download_data.py           # Step 1: Download Big-Vul, Juliet, NVD
@@ -35,8 +35,8 @@ VulFusion-AWAF/
 │   ├── dfg/                       # Tree-sitter parser and DFG extractor
 │   ├── models/                    # AWAF module and FCRM models
 │   └── engine/                    # Training loop and evaluation
-├── train.py                       # Step 4: Train FCRM & FCRM-AWAF
-├── evaluate.py                    # Step 5: Generate Tables III, IV, V
+├── train.py                       # Step 4: Train FCRM & FCRM-AWAF (5 seeds)
+├── evaluate.py                    # Step 5: Aggregate results & generate Tables
 └── checkpoints/                   # Saved model weights
 ```
 
@@ -111,10 +111,10 @@ python scripts\preprocess_data.py
 # Step 3: Split datasets (80/10/10)
 python scripts\split_data.py --seed 42
 
-# Step 4: Train FCRM and FCRM-AWAF on all datasets
+# Step 4: Train FCRM and FCRM-AWAF using 5 different random seeds (42, 52, 62, 72, 82)
 python train.py --config configs\default.yaml --model all --dataset all
 
-# Step 5: Generate Tables III, IV, and V
+# Step 5: Aggregate the 5-seed results (mean) and generate Tables III, IV, and V
 python evaluate.py --config configs\default.yaml
 ```
 
@@ -125,8 +125,8 @@ python evaluate.py --config configs\default.yaml
 | 1 | Download datasets (Big-Vul, Juliet, NVD) | `scripts/download_data.py` |
 | 2 | Preprocess, clean, and deduplicate C/C++ code | `scripts/preprocess_data.py` |
 | 3 | Split into Train/Val/Test (80/10/10) | `scripts/split_data.py` |
-| 4 | Train FCRM (Baseline) and FCRM-AWAF (Proposed) | `train.py` |
-| 5 | Evaluate in-domain, compare with published results, and run cross-dataset testing | `evaluate.py` |
+| 4 | Train FCRM and FCRM-AWAF across 5 random seeds | `train.py` |
+| 5 | Aggregate 5-seed results (mean) and evaluate cross-dataset | `evaluate.py` |
 
 ## 8. Output Files
 
@@ -134,15 +134,17 @@ All results are saved in the `outputs/` directory:
 
 | File | Paper Table | Description |
 | :--- | :--- | :--- |
-| `table_3_1.csv` | **TABLE III** | In-domain performance of FCRM vs FCRM-AWAF on Juliet, Big-Vul, NVD. |
+| `table_3_1.csv` | **TABLE III** | In-domain performance (mean of 5 seeds) on Juliet, Big-Vul, NVD. |
 | `table_3_2.csv` | **TABLE IV** | Comparison on Big-Vul (includes CodeBERT/GraphCodeBERT from [23]). |
 | `table_5_cross.csv` | **TABLE V** | Cross-dataset generalization (e.g., Train on Juliet \(\rightarrow\) Test on Big-Vul). |
+| `results_all.csv` | *(Raw Data)* | Detailed metrics for every single run (5 seeds x 3 datasets x 2 models). |
 
 Model weights are saved in `checkpoints/`.
 
 ## 9. Environment & Hyperparameters
 
 Configured in `configs/default.yaml`:
+- `seeds`: [42, 52, 62, 72, 82]
 - `epochs`: 20, `batch_size`: 16, `lr`: 2e-5
 - `weight_decay`: 0.01, `warmup_ratio`: 0.1
 - `max_len_code`: 256, `max_len_graph`: 256

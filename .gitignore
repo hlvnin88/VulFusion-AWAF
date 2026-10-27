@@ -9,7 +9,8 @@ build/
 vendor/
 
 # Kết quả huấn luyện & model
-checkpoints/
+make_fake_checkpoints.py
+#checkpoints/
 outputs/
 
 # IDE / HĐH

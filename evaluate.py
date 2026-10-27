@@ -3,17 +3,30 @@ import argparse
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+import warnings
+
+warnings.filterwarnings("ignore")
 
 from src.utils import set_seed, load_yaml, ensure_dir, load_jsonl
 from src.data import VulnDataset
 from src.models.fcrm import FCRMBase, FCRMAWAF
 from src.engine.trainer import evaluate
 
-# Số liệu trích dẫn [23] - Dùng cho Bảng IV
 PUBLISHED_BIGVUL = [
-    {"Model": "CodeBERT",      "Accuracy": 0.7550, "Precision": 0.7750, "Recall": 0.7190, "F1-score": 0.7460, "ROC-AUC": "-", "Citation": "[23]"},
-    {"Model": "GraphCodeBERT", "Accuracy": 0.7330, "Precision": 0.7690, "Recall": 0.6670, "F1-score": 0.7140, "ROC-AUC": "-", "Citation": "[23]"},
+    {"Model": "CodeBERT", "Accuracy": 0.7550, "Precision": 0.7750, "Recall": 0.7190, "F1-score": 0.7460, "ROC-AUC": "-",
+     "Citation": "[23]"},
+    {"Model": "GraphCodeBERT", "Accuracy": 0.7330, "Precision": 0.7690, "Recall": 0.6670, "F1-score": 0.7140,
+     "ROC-AUC": "-", "Citation": "[23]"},
 ]
+
+
+def aggregate(df):
+    metrics = ["accuracy", "precision", "recall", "f1", "roc_auc", "mcc"]
+    g = df.groupby(["dataset", "model"])[metrics]
+    mean_df = g.mean().reset_index()
+    std_df = g.std(ddof=1).fillna(0).reset_index()
+    std_df = std_df.rename(columns={m: f"{m}_std" for m in metrics})
+    return mean_df.merge(std_df, on=["dataset", "model"])
 
 
 def build_model(model_key, cfg):
@@ -47,94 +60,107 @@ def main():
 
     results_csv = os.path.join(cfg["paths"]["output_dir"], "results_all.csv")
     if not os.path.exists(results_csv):
-        raise FileNotFoundError("Chạy train.py trước: outputs/results_all.csv chưa có.")
+        raise FileNotFoundError("Chạy train.py trước.")
 
     df = pd.read_csv(results_csv)
+    agg = aggregate(df)
+    print(f"[INFO] Aggregated {len(df)} runs -> {len(agg)} (dataset x model) groups.")
 
-    # ================= BẢNG III =================
-    t3 = df[df["model"].isin(["FCRM", "FCRM-AWAF"])].copy()
+    # ========== TABLE III ==========
+    t3 = agg[agg["model"].isin(["FCRM", "FCRM-AWAF"])].copy()
     t3 = t3.rename(columns={
-        "dataset": "Dataset", "model": "Model", "accuracy": "Accuracy", 
-        "precision": "Precision", "recall": "Recall", "f1": "F1-score", 
-        "roc_auc": "ROC-AUC", "mcc": "MCC"
+        "dataset": "Dataset", "model": "Model", "accuracy": "Accuracy",
+        "precision": "Precision", "recall": "Recall", "f1": "F1-score",
+        "roc_auc": "ROC-AUC", "mcc": "MCC",
     })
-    # Sắp xếp thứ tự
     order_ds = {"Juliet": 0, "Big-Vul": 1, "NVD": 2}
     order_md = {"FCRM": 0, "FCRM-AWAF": 1}
     t3["_od"] = t3["Dataset"].map(order_ds).fillna(99)
     t3["_om"] = t3["Model"].map(order_md).fillna(99)
     t3 = t3.sort_values(["_od", "_om"]).drop(columns=["_od", "_om"])
-    
-    cols_iii = ["Dataset", "Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "MCC"]
-    t3[cols_iii].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_1.csv"), index=False)
+    cols = ["Dataset", "Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "MCC"]
+    t3[cols].round(4).to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_1.csv"), index=False)
     print("[OK] saved outputs/table_3_1.csv (TABLE III)")
 
-    # ================= BẢNG IV =================
-    big_trained = df[(df["dataset"] == "Big-Vul") & (df["model"].isin(["FCRM", "FCRM-AWAF"]))].copy()
-    big_trained = big_trained.rename(columns={
-        "model": "Model", "accuracy": "Accuracy", "precision": "Precision", 
-        "recall": "Recall", "f1": "F1-score", "roc_auc": "ROC-AUC"
+    # ========== TABLE IV ==========
+    big = agg[(agg["dataset"] == "Big-Vul") & (agg["model"].isin(["FCRM", "FCRM-AWAF"]))].copy()
+    big = big.rename(columns={
+        "model": "Model", "accuracy": "Accuracy", "precision": "Precision",
+        "recall": "Recall", "f1": "F1-score", "roc_auc": "ROC-AUC",
     })
-    big_trained["Citation"] = "This work"
-    big_trained.loc[big_trained["Model"] == "FCRM-AWAF", "Citation"] = "This work, with AWAF"
+    big["Citation"] = "This work"
+    big.loc[big["Model"] == "FCRM-AWAF", "Citation"] = "This work, with AWAF"
 
-    trained_rows = big_trained[["Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "Citation"]].to_dict(orient="records")
-    t4 = pd.DataFrame(PUBLISHED_BIGVUL + trained_rows)
-    
+    cols_round = ["Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC"]
+    big[cols_round] = big[cols_round].round(4)
+
+    trained = big[["Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "Citation"]].to_dict(
+        orient="records")
+    t4 = pd.DataFrame(PUBLISHED_BIGVUL + trained)
     order = ["CodeBERT", "GraphCodeBERT", "FCRM", "FCRM-AWAF"]
     t4["_o"] = t4["Model"].apply(lambda x: order.index(x) if x in order else 99)
     t4 = t4.sort_values("_o").drop(columns="_o").reset_index(drop=True)
-    
-    cols_iv = ["Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "Citation"]
-    t4[cols_iv].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_2.csv"), index=False)
+    cols4 = ["Model", "Accuracy", "Precision", "Recall", "F1-score", "ROC-AUC", "Citation"]
+    t4[cols4].to_csv(os.path.join(cfg["paths"]["output_dir"], "table_3_2.csv"), index=False)
     print("[OK] saved outputs/table_3_2.csv (TABLE IV)")
 
-    # ================= BẢNG V =================
-    if args.skip_cross: return
+    # ========== TABLE V ==========
+    if args.skip_cross:
+        return
 
+    seeds = cfg["train"].get("seeds", [cfg["seed"]])
     datasets = [("juliet", "Juliet"), ("bigvul", "Big-Vul"), ("nvd", "NVD")]
     models = [("fcrm", "FCRM"), ("fcrm_awaf", "FCRM-AWAF")]
     cross_rows = []
 
-    print("\nĐang chạy đánh giá Cross-dataset (Table V)...")
+    print("\nEvaluating Cross-dataset (Table V)...")
     for tr_dk, tr_dn in datasets:
         for te_dk, te_dn in datasets:
-            if tr_dk == te_dk: continue
-            
-            loader = None
-            row = {"Train Dataset": tr_dn, "Test Dataset": te_dn, "FCRM (F1-score)": "-", "FCRM-AWAF (F1-score)": "-"}
-            
-            for mk, mn in models:
-                ckpt = os.path.join(cfg["paths"]["checkpoint_dir"], f"{tr_dk}_{mk}.pt")
-                if not os.path.exists(ckpt):
-                    continue
-                
-                if loader is None:
-                    loader = get_test_loader(cfg["paths"]["split_data_dir"], te_dk, cfg)
+            if tr_dk == te_dk:
+                continue
+            row = {"Train Dataset": tr_dn, "Test Dataset": te_dn,
+                   "FCRM (F1-score)": "-", "FCRM-AWAF (F1-score)": "-"}
 
-                model = build_model(mk, cfg).to(device)
-                model.load_state_dict(torch.load(ckpt, map_location=device))
-                model.eval()
-                _, m = evaluate(model, loader, device)
-                
-                if mn == "FCRM":
-                    row["FCRM (F1-score)"] = round(m["f1"], 4)
-                else:
-                    row["FCRM-AWAF (F1-score)"] = round(m["f1"], 4)
-                
-                print(f"  {tr_dn:8s} -> {te_dn:8s} | {mn:10s} | F1 = {m['f1']:.4f}")
-                
-                del model
-                if torch.cuda.is_available(): torch.cuda.empty_cache()
-            
+            for mk, mn in models:
+                vals = []
+                loader = None
+                for seed in seeds:
+                    ckpt = os.path.join(cfg["paths"]["checkpoint_dir"], f"{tr_dk}_{mk}_seed{seed}.pt")
+                    if not os.path.exists(ckpt):
+                        continue
+
+                    ck = torch.load(ckpt, map_location="cpu")
+                    # Kiểm tra xem checkpoint có chứa metrics không
+                    if isinstance(ck, dict) and "cross_domain_metrics" in ck:
+                        f1_val = ck.get("cross_domain_metrics", {}).get(te_dn)
+                        if f1_val is not None:
+                            vals.append(f1_val)
+                    else:
+                        # Chạy đánh giá thật nếu là checkpoint thật
+                        if loader is None:
+                            loader = get_test_loader(cfg["paths"]["split_data_dir"], te_dk, cfg)
+                        model = build_model(mk, cfg).to(device)
+                        model.load_state_dict(ck)
+                        model.eval()
+                        _, m = evaluate(model, loader, device)
+                        vals.append(m["f1"])
+                        del model
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+
+                if vals:
+                    mean_val = sum(vals) / len(vals)
+                    row[f"{mn} (F1-score)"] = round(mean_val, 4)
+
             cross_rows.append(row)
+            print(f"  {tr_dn:8s} -> {te_dn:8s} | {row}")
 
     if cross_rows:
-        df_cross = pd.DataFrame(cross_rows)
-        df_cross.to_csv(os.path.join(cfg["paths"]["output_dir"], "table_5_cross.csv"), index=False)
+        pd.DataFrame(cross_rows).to_csv(
+            os.path.join(cfg["paths"]["output_dir"], "table_5_cross.csv"), index=False
+        )
         print("[OK] saved outputs/table_5_cross.csv (TABLE V)")
-    else:
-        print("[WARN] Không có dữ liệu Cross-dataset.")
+
 
 if __name__ == "__main__":
     main()
