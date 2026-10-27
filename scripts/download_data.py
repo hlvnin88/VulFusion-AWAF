@@ -5,8 +5,13 @@ Tải trọn bộ 3 dataset và điều chỉnh số lượng (Resampling)
 Chạy: python scripts/download_data.py
 """
 import os
+import sys
 import random
 import argparse
+
+# Tự động thêm thư mục gốc vào sys.path để import được module 'src'
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from datasets import load_dataset
 from src.utils import ensure_dir, write_jsonl
 
